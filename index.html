@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heparin Infusion Adjustment Algorithm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles can go here if needed, overriding Tailwind or adding specific behaviors */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* bg-gray-100 */
+        }
+        /* Ensure that newlines in JavaScript-set text are respected */
+        .whitespace-pre-line {
+            white-space: pre-line;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+        <h1 class="text-2xl font-bold text-center text-blue-700 mb-6">
+            Heparin Infusion Adjustment (Nomogram Selector)
+        </h1>
+        <p class="text-sm text-gray-600 mb-4 text-center">
+            This tool provides guidance based on generalized nomograms.
+            Always prioritize clinical judgment and institutional protocols.
+        </p>
+
+        <div class="space-y-4">
+            <div class="mb-4">
+                <label class="block text-base font-medium text-gray-800 mb-2">Select Nomogram Type:</label>
+                <div class="flex items-center space-x-4">
+                    <input type="radio" id="nomogramTypeAptt" name="nomogramType" value="aptt" checked
+                           class="form-radio h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                    <label for="nomogramTypeAptt" class="text-gray-700">aPTT-based Nomogram</label>
+
+                    <input type="radio" id="nomogramTypeAct" name="nomogramType" value="act"
+                           class="form-radio h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                    <label for="nomogramTypeAct" class="text-gray-700">ACT-based Nomogram (for ECMO)</label>
+                </div>
+            </div>
+
+            <div>
+                <label for="aptt" class="block text-sm font-medium text-gray-700 mb-1">Last aPTT (seconds)</label>
+                <input type="number" id="aptt" placeholder="e.g., 65"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+            <div>
+                <label for="act" class="block text-sm font-medium text-gray-700 mb-1">
+                    Last ACT (seconds)
+                </label>
+                <input type="number" id="act" placeholder="e.g., 200"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+            <div>
+                <label for="heparinRate" class="block text-sm font-medium text-gray-700 mb-1">Current Heparin Infusion Rate (units/hour)</label>
+                <input type="number" id="heparinRate" placeholder="e.g., 1200"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+            <div>
+                <label for="weight" class="block text-sm font-medium text-gray-700 mb-1">Patient Weight (kg)</label>
+                <input type="number" id="weight" placeholder="e.g., 70"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+            <div>
+                <label for="height" class="block text-sm font-medium text-gray-700 mb-1">
+                    Patient Height (cm) <span class="text-gray-500">(Optional)</span>
+                </label>
+                <input type="number" id="height" placeholder="e.g., 170"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+
+            <button onclick="calculateAdjustment()"
+                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                Calculate Adjustment
+            </button>
+        </div>
+
+        <!-- Button to toggle Guidelines -->
+        <button onclick="toggleGuidelines()"
+                class="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 mt-6">
+            Show Guidelines and Important Considerations
+        </button>
+
+        <!-- Guidelines and Important Considerations Section -->
+        <div id="guidelinesSection" class="mt-6 p-4 bg-gray-50 border-l-4 border-gray-300 rounded-md hidden">
+            <h2 class="text-lg font-semibold text-gray-800 mb-2">Guidelines and Important Considerations:</h2>
+            <ul class="list-disc list-inside text-sm text-gray-700 space-y-2">
+                <li>
+                    **ACT Target Ranges for ECMO (ELSO General Guideline):**
+                    <ul class="list-circle list-inside ml-4 mt-1">
+                        <li>ELSO generally recommends an ACT target between **180-220 seconds** for ECMO patients.</li>
+                        <li>*Note: Individual institutional protocols may define slightly different targets (e.g., differentiating VV vs. VA ECMO) based on local experience and patient-specific factors.*</li>
+                    </ul>
+                </li>
+                <li>
+                    **aPTT Therapeutic Range (General Rashke-like Nomogram):**
+                    <ul class="list-circle list-inside ml-4 mt-1">
+                        <li>Commonly considered **55-90 seconds** (or 1.5-2.5 times control), but this is highly dependent on laboratory reagents and calibration.</li>
+                        <li>*This nomogram is a generalized representation based on the original Rashke study and similar weight-based protocols aiming for rapid therapeutic anticoagulation.*</li>
+                    </ul>
+                </li>
+                <li>
+                    **Multimodal Monitoring:** In complex ECMO cases, a combination of tests (e.g., ACT, aPTT, Anti-Factor Xa, and/or viscoelastic testing like TEG/ROTEM) is often recommended for comprehensive anticoagulation management.
+                </li>
+                <li>
+                    **Clinical Judgment:** This tool provides guidance only. Always integrate laboratory values with the patient's overall clinical status, bleeding risk, and thrombotic risk.
+                </li>
+                <li>
+                    **Institutional Protocols:** Always refer to and adhere to your specific hospital or institution's established guidelines and protocols for heparin management in ECMO or other clinical settings. These take precedence over generalized nomograms.
+                </li>
+                <li>
+                    **Further Information:**
+                    <ul class="list-circle list-inside ml-4 mt-1">
+                        <li>For comprehensive guidelines on Extracorporeal Life Support, refer to the official <a href="https://www.elso.org/ecmo-resources/elso-ecmo-guidelines.aspx" target="_blank" class="text-blue-600 hover:underline">ELSO Guidelines</a>.</li>
+                        <li>For more details on the original Rashke's Nomogram, you can refer to related research: <a href="https://www.jvsmedicscorner.com/Medicine_files/Weight%20based%20IV%20heparin%20nomogram.pdf" target="_blank" class="text-blue-600 hover:underline">Weight-based Heparin Dosing Nomogram</a>.</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+
+        <div id="resultContainer" class="mt-6 p-4 bg-blue-50 border-l-4 border-blue-400 rounded-md hidden">
+            <h2 class="text-lg font-semibold text-blue-800 mb-2">Recommended Adjustment:</h2>
+            <p id="adjustmentResult" class="font-bold text-xl text-blue-800 mb-2"></p>
+            <p id="messageResult" class="text-sm text-blue-800 whitespace-pre-line"></p>
+            <p class="mt-4 text-xs text-gray-600">
+                Disclaimer: This algorithm is based on a generalized nomogram
+                and should be used as a guide. Specific institutional protocols and patient
+                clinical status always take precedence. Consult with a physician for any clinical decisions.
+            </p>
+        </div>
+
+        <div id="errorContainer" class="mt-6 p-4 bg-red-50 border-l-4 border-red-400 rounded-md hidden">
+            <p id="errorMessage" class="text-sm text-red-800"></p>
+        </div>
+
+        <!-- Disclaimer Section -->
+        <div class="mt-8 p-4 bg-red-50 border-l-4 border-red-400 rounded-md">
+            <h3 class="text-base font-semibold text-red-800 mb-2">Disclaimer:</h3>
+            <p class="text-sm text-red-800">
+                This tool is for **informational purposes only**. It is **not a substitute for professional medical advice**. Always consult a qualified healthcare professional for patient care decisions and adhere to institutional protocols.
+            </p>
+        </div>
+
+        <!-- Developer Information -->
+        <div class="mt-8 text-center text-xs text-gray-500">
+            <p>Developed by: **Dr. Raghavendra Deshpande**</p>
+            <p>ICU Consultant, Manipal Hospitals Sarjapur Road</p>
+        </div>
+    </div>
+
+    <script>
+        // Define the aPTT-based Rashke-like nomogram data
+        const apttNomogramData = [
+            {
+                minVal: -Infinity,
+                maxVal: 36, // < 37
+                adjustment: `IMMEDIATE ACTION REQUIRED: Consider a heparin bolus (e.g., 80 units/kg) and INCREASE infusion rate by 200 units/hour.`,
+                message: `aPTT is critically low (<37 seconds). This indicates significant under-anticoagulation and a high risk of thrombosis.`,
+                nextCheck: '4-6 hours'
+            },
+            {
+                minVal: 37,
+                maxVal: 45,
+                adjustment: `Consider 40 units/kg IV bolus, then INCREASE rate by 200 units/hour from current rate.`,
+                message: `aPTT is sub-therapeutic.`,
+                nextCheck: '4-6 hours'
+            },
+            {
+                minVal: 46,
+                maxVal: 54,
+                adjustment: `INCREASE rate by 100 units/hour from current rate.`,
+                message: `aPTT is slightly sub-therapeutic.`,
+                nextCheck: '4-6 hours'
+            },
+            {
+                minVal: 55,
+                maxVal: 90,
+                adjustment: `No change. Continue current rate.`,
+                message: `aPTT is within therapeutic range (55-90 seconds).`,
+                nextCheck: '4-6 hours or Daily (if stable)'
+            },
+            {
+                minVal: 91,
+                maxVal: 105,
+                adjustment: `DECREASE rate by 200 units/hour from current rate.`,
+                message: `aPTT is supra-therapeutic. Monitor for bleeding.`,
+                nextCheck: '4-6 hours'
+            },
+            {
+                minVal: 106,
+                maxVal: 120,
+                adjustment: `STOP infusion for 60 minutes, then DECREASE by 200 units/hour from current rate.`,
+                message: `aPTT is significantly supra-therapeutic. Monitor closely for bleeding.`,
+                nextCheck: 'After 1 hour stop, then 4 hours'
+            },
+            {
+                minVal: 121, // > 120
+                maxVal: Infinity,
+                adjustment: `CRITICAL ACTION: STOP infusion for 2 hours.`,
+                message: `aPTT is critically high (>120 seconds). IMMEDIATELY STOP infusion for 2 hours. Check patient for bleeding. Verify infusion rate calculations and pump settings. Contact medical officer immediately. Recheck aPTT after 2 hours. If new aPTT is LESS than 120 seconds and there is no evidence of bleeding, DECREASE by 300 units/hour. If new aPTT is GREATER than 120 seconds, continue to WITHHOLD the infusion, and contact the medical officer for urgent hematology specialist advice.`,
+                nextCheck: 'After 2 hour stop, then 4 hours (or as directed by physician)'
+            }
+        ];
+
+        // Define the ACT-based nomogram data (aligned with ELSO's general 180-220s target)
+        const actNomogramData = [
+            {
+                minVal: -Infinity,
+                maxVal: 179, // < 180
+                adjustment: `IMMEDIATE ACTION REQUIRED: Consider heparin bolus (e.g., 20-30 units/kg), then INCREASE infusion rate by 2-5 units/kg/hour`,
+                message: `ACT is sub-therapeutic (<180 seconds). This suggests under-anticoagulation and increased thrombotic risk.`,
+                nextCheck: '1-2 hours'
+            },
+            {
+                minVal: 180,
+                maxVal: 220,
+                adjustment: `No change. Maintain current infusion rate.`,
+                message: `ACT is within ELSO's general therapeutic range (180-220 seconds).`,
+                nextCheck: '4-6 hours or per protocol'
+            },
+            {
+                minVal: 221,
+                maxVal: 250,
+                adjustment: `DECREASE infusion rate by 1-2 units/kg/hour`,
+                message: `ACT is supra-therapeutic. Monitor for bleeding.`,
+                nextCheck: '2-4 hours'
+            },
+            {
+                minVal: 251,
+                maxVal: Infinity, // > 250
+                adjustment: `CRITICAL ACTION: STOP infusion for 30-60 minutes.`,
+                message: `ACT is critically high (>250 seconds). Assess for bleeding. Consider protamine if severe bleeding. Contact medical officer immediately.`,
+                nextCheck: 'After stop, then 1-2 hours (or as directed by physician)'
+            }
+        ];
+
+        // Function to toggle the visibility of the guidelines section
+        function toggleGuidelines() {
+            const guidelinesSection = document.getElementById('guidelinesSection');
+            const toggleButton = document.querySelector('button[onclick="toggleGuidelines()"]');
+
+            if (guidelinesSection.classList.contains('hidden')) {
+                guidelinesSection.classList.remove('hidden');
+                toggleButton.textContent = 'Hide Guidelines and Important Considerations';
+            } else {
+                guidelinesSection.classList.add('hidden');
+                toggleButton.textContent = 'Show Guidelines and Important Considerations';
+            }
+        }
+
+        function calculateAdjustment() {
+            const selectedNomogramType = document.querySelector('input[name="nomogramType"]:checked').value;
+
+            let primaryValue;
+            let currentNomogramData;
+            let primaryValueName = '';
+
+            // Get values from input fields
+            const aptt = parseFloat(document.getElementById('aptt').value);
+            const act = parseFloat(document.getElementById('act').value);
+            const heparinRate = parseFloat(document.getElementById('heparinRate').value);
+            const weight = parseFloat(document.getElementById('weight').value);
+            const height = parseFloat(document.getElementById('height').value); // Also check height for negative
+
+            const resultContainer = document.getElementById('resultContainer');
+            const errorContainer = document.getElementById('errorContainer');
+            const adjustmentResult = document.getElementById('adjustmentResult');
+            const messageResult = document.getElementById('messageResult');
+            const errorMessage = document.getElementById('errorMessage');
+
+            // Hide previous results and errors
+            resultContainer.classList.add('hidden');
+            errorContainer.classList.add('hidden');
+
+            // Input validation for negative values
+            if (aptt < 0 || act < 0 || heparinRate < 0 || weight < 0 || height < 0) {
+                errorMessage.textContent = 'Negative values are not allowed for any input. Please recheck your entries.';
+                errorContainer.classList.remove('hidden');
+                return;
+            }
+
+            // Assign primary value and nomogram data based on selection after negative value check
+            if (selectedNomogramType === 'aptt') {
+                primaryValue = aptt;
+                currentNomogramData = apttNomogramData;
+                primaryValueName = 'aPTT';
+            } else { // selectedNomogramType === 'act'
+                primaryValue = act;
+                currentNomogramData = actNomogramData;
+                primaryValueName = 'ACT';
+            }
+
+            // Input validation for NaN (empty or non-numeric) after negative check
+            if (isNaN(primaryValue) || isNaN(heparinRate) || isNaN(weight)) {
+                errorMessage.textContent = `Please enter valid numbers for Last ${primaryValueName}, Current Heparin Infusion Rate, and Patient Weight.`;
+                errorContainer.classList.remove('hidden');
+                return;
+            }
+
+
+            let recommendedAdjustment = '';
+            let recommendationMessage = '';
+            let nextCheckTime = '';
+
+            // Find the correct nomogram entry based on the primary value
+            const currentEntry = currentNomogramData.find(entry => primaryValue >= entry.minVal && primaryValue <= entry.maxVal);
+
+            if (currentEntry) {
+                recommendedAdjustment = currentEntry.adjustment;
+                recommendationMessage = currentEntry.message;
+                nextCheckTime = currentEntry.nextCheck;
+            } else {
+                // Fallback for unexpected values, though ranges cover all numbers
+                recommendedAdjustment = 'Could not determine adjustment.';
+                recommendationMessage = `The ${primaryValueName} value is outside the defined nomogram ranges.`;
+                nextCheckTime = 'Consult physician.';
+            }
+
+            // --- ACT/aPTT Cross-Considerations (Secondary context) ---
+            // This part provides cross-monitoring guidance based on the OTHER parameter.
+            // It's not part of the primary adjustment logic but provides helpful context.
+            let crossCheckMessage = '';
+            // Use the already parsed aptt and act values
+            if (selectedNomogramType === 'aptt' && !isNaN(act)) {
+                if (act < 180) {
+                    crossCheckMessage = `Note: ACT (${act} seconds) is below ELSO's general ECMO target range (180-220 seconds). Consider this in overall anticoagulation assessment.`;
+                } else if (act > 220) {
+                    crossCheckMessage = `Note: ACT (${act} seconds) is above ELSO's general ECMO target range (180-220 seconds). Monitor for bleeding.`;
+                } else {
+                    crossCheckMessage = `Note: ACT (${act} seconds) is within ELSO's general ECMO target range (180-220 seconds).`;
+                }
+            } else if (selectedNomogramType === 'act' && !isNaN(aptt)) {
+                // General aPTT therapeutic range is 55-90 for many protocols
+                if (aptt < 55) {
+                    crossCheckMessage = `Note: aPTT (${aptt} seconds) is sub-therapeutic (<55 seconds). Consider this in overall anticoagulation assessment.`;
+                } else if (aptt > 90) {
+                    crossCheckMessage = `Note: aPTT (${aptt} seconds) is supra-therapeutic (>90 seconds). Monitor for bleeding.`;
+                } else {
+                    crossCheckMessage = `Note: aPTT (${aptt} seconds) is within a common therapeutic range (55-90 seconds).`;
+                }
+            } else {
+                crossCheckMessage = `Please provide both aPTT and ACT values for a more comprehensive assessment, especially for ECMO patients, as these tests offer complementary information.`;
+            }
+
+            adjustmentResult.textContent = recommendedAdjustment;
+            messageResult.textContent = `${recommendationMessage}\n\nNext check: ${nextCheckTime}.\n\n${crossCheckMessage}`;
+            resultContainer.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
