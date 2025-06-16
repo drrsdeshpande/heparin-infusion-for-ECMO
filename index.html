@@ -204,33 +204,39 @@
             }
         ];
 
-        // Define the ACT-based nomogram data (aligned with ELSO's general 180-220s target)
+        // Define the ACT-based nomogram data
+        // Action types: 'increase', 'no_change', 'decrease', 'stop'
         const actNomogramData = [
             {
                 minVal: -Infinity,
                 maxVal: 179, // < 180
-                adjustment: `IMMEDIATE ACTION REQUIRED: Consider heparin bolus (e.g., 20-30 units/kg), then INCREASE infusion rate by 2-5 units/kg/hour`,
+                action: 'increase',
+                unitsPerKgChange: { min: 2, max: 5 }, // Range for units/kg/hr increase
+                bolusPerKg: { min: 20, max: 30 }, // Range for units/kg bolus
                 message: `ACT is sub-therapeutic (<180 seconds). This suggests under-anticoagulation and increased thrombotic risk.`,
                 nextCheck: '1-2 hours'
             },
             {
                 minVal: 180,
                 maxVal: 220,
-                adjustment: `No change. Maintain current infusion rate.`,
+                action: 'no_change',
                 message: `ACT is within ELSO's general therapeutic range (180-220 seconds).`,
                 nextCheck: '4-6 hours or per protocol'
             },
             {
                 minVal: 221,
                 maxVal: 250,
-                adjustment: `DECREASE infusion rate by 1-2 units/kg/hour`,
+                action: 'decrease',
+                unitsPerKgChange: { min: 1, max: 2 }, // Range for units/kg/hr decrease
                 message: `ACT is supra-therapeutic. Monitor for bleeding.`,
                 nextCheck: '2-4 hours'
             },
             {
                 minVal: 251,
                 maxVal: Infinity, // > 250
-                adjustment: `CRITICAL ACTION: STOP infusion for 30-60 minutes.`,
+                action: 'stop',
+                stopDuration: '30-60 minutes',
+                followUpDecreasePerKg: { min: 2, max: 5 }, // Decrease units/kg/hr after stop, if applicable
                 message: `ACT is critically high (>250 seconds). Assess for bleeding. Consider protamine if severe bleeding. Contact medical officer immediately.`,
                 nextCheck: 'After stop, then 1-2 hours (or as directed by physician)'
             }
@@ -308,8 +314,35 @@
             const currentEntry = currentNomogramData.find(entry => primaryValue >= entry.minVal && primaryValue <= entry.maxVal);
 
             if (currentEntry) {
-                recommendedAdjustment = currentEntry.adjustment;
-                recommendationMessage = currentEntry.message;
+                if (selectedNomogramType === 'act') {
+                    // Dynamic calculation for ACT adjustments based on weight
+                    if (currentEntry.action === 'increase') {
+                        const minChange = Math.round(currentEntry.unitsPerKgChange.min * weight);
+                        const maxChange = Math.round(currentEntry.unitsPerKgChange.max * weight);
+                        recommendedAdjustment = `INCREASE rate by ${minChange} - ${maxChange} units/hour from current rate.`;
+                        if (currentEntry.bolusPerKg) {
+                            const minBolus = Math.round(currentEntry.bolusPerKg.min * weight);
+                            const maxBolus = Math.round(currentEntry.bolusPerKg.max * weight);
+                            recommendedAdjustment = `IMMEDIATE ACTION REQUIRED: Consider a heparin bolus of ${minBolus} - ${maxBolus} units, then ${recommendedAdjustment}`;
+                        }
+                    } else if (currentEntry.action === 'decrease') {
+                        const minChange = Math.round(currentEntry.unitsPerKgChange.min * weight);
+                        const maxChange = Math.round(currentEntry.unitsPerKgChange.max * weight);
+                        recommendedAdjustment = `DECREASE rate by ${minChange} - ${maxChange} units/hour from current rate.`;
+                    } else if (currentEntry.action === 'no_change') {
+                        recommendedAdjustment = `No change. Continue current rate.`;
+                    } else if (currentEntry.action === 'stop') {
+                        recommendedAdjustment = `CRITICAL ACTION: STOP infusion for ${currentEntry.stopDuration}.`;
+                        // Add the follow-up decrease to the message
+                        const minFollowUpDecrease = Math.round(currentEntry.followUpDecreasePerKg.min * weight);
+                        const maxFollowUpDecrease = Math.round(currentEntry.followUpDecreasePerKg.max * weight);
+                        recommendationMessage = `${currentEntry.message} After the stop, if conditions allow, consider DECREASING by ${minFollowUpDecrease} - ${maxFollowUpDecrease} units/hour from the previous rate.`;
+                    }
+                } else {
+                    // Use predefined adjustment for aPTT nomogram
+                    recommendedAdjustment = currentEntry.adjustment;
+                }
+                recommendationMessage = recommendationMessage || currentEntry.message; // Use currentEntry.message if recommendationMessage is not set by ACT logic
                 nextCheckTime = currentEntry.nextCheck;
             } else {
                 // Fallback for unexpected values, though ranges cover all numbers
